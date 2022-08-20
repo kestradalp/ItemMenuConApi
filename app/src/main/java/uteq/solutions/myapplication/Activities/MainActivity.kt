@@ -4,6 +4,7 @@ package uteq.solutions.myapplication.Activities
 import Alumnos
 import Maestros
 import android.os.Bundle
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -15,6 +16,10 @@ import uteq.solutions.myapplication.R
 import androidx.fragment.app.Fragment
 import androidx.core.view.GravityCompat
 import androidx.appcompat.app.AppCompatActivity
+import com.android.volley.Request
+import com.android.volley.Response
+import com.android.volley.toolbox.StringRequest
+import com.android.volley.toolbox.Volley
 import uteq.solutions.myapplication.Models.User
 import com.google.android.material.navigation.NavigationView
 import com.squareup.picasso.Picasso
@@ -26,99 +31,122 @@ import uteq.solutions.myapplication.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
+    lateinit var binding: ActivityMainBinding
     lateinit var user: User
-    var type: Type? = null
-
+    lateinit var type: Type
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        //Activar el botón del menú
-        val toggle: ActionBarDrawerToggle = ActionBarDrawerToggle(
-            this,
-            binding.drawerLayout,
-            binding.toolbar,
-            R.string.open_drawer,
-            R.string.close_drawer
+        binding.drawerLayout.addDrawerListener(
+            ActionBarDrawerToggle(
+                this,
+                binding.drawerLayout,
+                binding.toolbar,
+                R.string.open_drawer,
+                R.string.close_drawer
+            )
         )
-        binding.drawerLayout.addDrawerListener(toggle)
 
-        //Tomar el objeto usuario que me pasa el login
         user = intent.getParcelableExtra<User>("user") as User
 
-        //Cargo los datos del usuario en el menú
+        getJsonAPI()
 
-        var header: View? = binding.navView.getHeaderView(0)
+
+    }
+// Obtengo el JSON
+    fun getJsonAPI() {
+
+        val url = "https://mocki.io/v1/d21960b0-575b-48fc-8e02-1a9190f3434a"
+        val queueRequest = Volley.newRequestQueue(this)
+
+        val request = object : StringRequest(
+            Request.Method.GET, url,
+            Response.Listener<String> { response ->
+
+                process(response)
+
+            },
+            Response.ErrorListener {
+                Log.d("Error: ", it.toString())
+            }) {
+        }
+        queueRequest.add(request)
+
+    }
+
+// Aqui se realiza el procesado
+    fun process(jsonString: String) {
+
+        setTypeUser(jsonString)
+
+        val header: View = binding.navView.getHeaderView(0)
 
         Picasso.get().load(user.avatar).into(
-            header?.findViewById<CircleImageView>(R.id.profile_image)
+            header.findViewById<CircleImageView>(R.id.profile_image)
         )
-        header?.findViewById<TextView>(R.id.lblNombreUser)?.text = user.name
 
-        type = getTypeUser(user.type.toString())
-        header?.findViewById<TextView>(R.id.lblTipoUsuario)?.text = type?.name
+        header.findViewById<TextView>(R.id.lblNombreUser).text = user.name
+        header.findViewById<TextView>(R.id.lblTipoUsuario).text = type.name
         addOptions()
 
     }
 
-    private fun addOptions() {
+// Asigno el tipo de usuario en base al json que obtuve enteriormente
+    fun setTypeUser(strJsonType: String) {
+        val typeArray = Type.jsonObjectsBuild(JSONArray(strJsonType))
+        for (type in typeArray) {
+            if (user.type == type.id) {
+                this.type = type
+                break
+            }
+        }
+    }
 
-        for (i in 0 until type!!.options!!.size) {
-            var option = type!!.options!![i].toString()
-
-            binding.navView.menu.add(option).setIcon(R.drawable.iconmenu)
+// Agrego las opciones al menú
+    fun addOptions() {
+        for (option in type.options!!) {
+            binding.navView.menu.add(option.toString()).setIcon(R.drawable.iconmenu)
                 .setOnMenuItemClickListener(MenuItem.OnMenuItemClickListener { //do what u want
-                    when (it.title) {
-                        "PENDIENTES" -> {
-                            setFragment(Pendientes())
-                        }
-                        "AULA VIRTUAL" -> {
-                            setFragment(FichaMedica())
-                        }
-                        "FICHA MÉDICA" -> {
-                            setFragment(FichaMedica())
-                        }
-                        "MALLA" -> {
-                            setFragment(Malla())
-                        }
-                        "HOJA DE VIDA" -> {
-                            setFragment(HojaDeVida())
-                        }
-                        "MAESTROS" -> {
-                            setFragment(Maestros())
-                        }
-                        "ALUMNOS" -> {
-                            setFragment(Alumnos())
-                        }
-                    }
                     binding.toolbar.title = it.title
                     binding.drawerLayout.closeDrawer(GravityCompat.START)
+                    setFragment(defFragment(it.title.toString()))
                     true
                 })
         }
     }
 
-
-    fun getTypeUser(idTypeUser: String): Type? {
-
-        //Aquí se debería hacer el pedido a la api, pero como no tengo, uso un json en un string :v
-        val jsonTypes =
-            "[{\"name\":\"Estudiante\",\"id\":\"1\",\"options\":[\"PENDIENTES\",\"AULA VIRTUAL\",\"FICHA MÉDICA\",\"HOJA DE VIDA\"]},{\"name\":\"Profesor\",\"id\":\"2\",\"options\":[\"AULA VIRTUAL\",\"FICHA MÉDICA\",\"MALLA\",\"HOJA DE VIDA\"]},{\"name\":\"Coordinador\",\"id\":\"3\",\"options\":[\"ALUMNOS\",\"MAESTROS\",\"AULA VIRTUAL\",\"FICHA MÉDICA\",\"MALLA\",\"HOJA DE VIDA\"]}]"
-
-        val typeArray = Type.jsonObjectsBuild(JSONArray(jsonTypes))
-
-        for (i in 0 until typeArray.size) {
-            if (idTypeUser == typeArray[i].id) {
-                return typeArray[i]
+// Defino que fragment se va a abrir en cada item
+    fun defFragment(itemTitle: String): Fragment {
+        return when (itemTitle) {
+            "PENDIENTES" -> {
+                Pendientes()
+            }
+            "AULA VIRTUAL" -> {
+                FichaMedica()
+            }
+            "FICHA MÉDICA" -> {
+                FichaMedica()
+            }
+            "MALLA" -> {
+                Malla()
+            }
+            "HOJA DE VIDA" -> {
+                HojaDeVida()
+            }
+            "MAESTROS" -> {
+                Maestros()
+            }
+            else -> {
+                Alumnos()
             }
         }
-        return null
     }
 
-    private fun setFragment(fragment: Fragment) {
+// Lanzo el fragment que defini
+    fun setFragment(fragment: Fragment) {
         supportFragmentManager.beginTransaction().apply {
             replace(R.id.content_frame, fragment)
             commit()
